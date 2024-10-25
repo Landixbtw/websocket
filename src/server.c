@@ -6,6 +6,15 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <errno.h>
+
+
+// https://beej.us/guide/bgnet/source/examples/server.c
+// https://beej.us/guide/bgnet/html/index-wide.html#getaddrinfoprepare-to-launch
+
+#define BACKLOG 10
+#define PORT "3490"
+
 
 void valid_ll_servinfo(struct addrinfo *linked_list);
 
@@ -13,6 +22,9 @@ void valid_ll_servinfo(struct addrinfo *linked_list);
 int server(void)
 {
     int status = 0;
+    // TODO: ???
+    struct sockaddr_storage client_addr;
+
     // servinfo will point to the result of getaddrinfo
     struct addrinfo hints, *servinfo;
     // This will make sure that the hints struct is empty before using it
@@ -55,7 +67,7 @@ int server(void)
      * https://stackoverflow.com/questions/23401147/what-is-the-difference-between-struct-addrinfo-and-struct-sockaddr
     */
 
-    if ((status = getaddrinfo("localhost", "8080", &hints, &servinfo)) != 0)
+    if ((status = getaddrinfo("localhost", PORT, &hints, &servinfo)) != 0)
     {
         fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
         exit(EXIT_FAILURE);
@@ -118,12 +130,12 @@ int server(void)
     }
 
 
-        /*
+    /*
      * This will listen to the connection (s)
      * @param fd: This is the socket we set earlier (s)
      * @param n: This is how many connection requests will be queued before further requests are refused
      */
-    int l = listen(s, 5);
+    int l = listen(s, BACKLOG);
     if (l == -1) {
         perror("listen()");
         close(s);
@@ -132,20 +144,45 @@ int server(void)
     }
 
 
-    int a = accept(s, servinfo->ai_addr, &servinfo->ai_addrlen);
+    socklen_t addr_size = sizeof client_addr; 
+    int a = accept(s, (struct sockaddr *)&client_addr, &addr_size);
     if (a == -1) {
         perror("accept()");
         close(s);
         freeaddrinfo(servinfo);
         exit(EXIT_FAILURE);
     }
-    freeaddrinfo(servinfo); // Since servinfo is a linked list we need to free it at the end.
-    close(s); // close the listening socket
+
+    /*
+     * the server obv also need to be able to receive something. So after 
+     * accepting the request from the client we can receive messages
+     * @param socket: The socket 
+     * @param buffer: Points to a buffer where the message should be stored
+     * @param length: length of the buffer in bytes.
+     * @param flags: type of message reception. (MSG_PEEK. Data is treated as 
+     * unread, next recv or similar function can still return the data)
+     */
+    char *buf;
+    int r = recv(s, &buf, strlen(buf), MSG_PEEK);
+    if (r == -1) {
+        perror("recv()");
+        close(s);
+        freeaddrinfo(servinfo);
+        exit(EXIT_FAILURE);
+    } else if (r == 0) {
+        fprintf(stdout, "The client has closed the connection\n");
+    }
+
+
+    // Since servinfo is a linked list we need to free it at the end.
+    freeaddrinfo(servinfo);  
+    // close the listening socket
+    close(s);
     return 0;
 }
 
 
-void valid_ll_servinfo(struct addrinfo *linked_list)
+void validate_ll_servinfo(struct addrinfo *linked_list)
 {
     struct addrinfo *ptr;
 

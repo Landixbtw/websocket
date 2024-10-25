@@ -10,7 +10,7 @@ inc_dir = include_directories('include')
 
 executable(
     meson.project_name(),
-['src/server.c', 'src/main.c'],
+['src/server.c'],
 include_directories: inc_dir,
 build_by_default: true,
 )

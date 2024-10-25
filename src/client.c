@@ -9,14 +9,8 @@
 #include <string.h>
 #include <unistd.h>
 
-// Setup client address information
-// getaddrinfo
-
-// create a new socket for the client
-
-// connect to the server via connect()
-// send() or receive (recv())
-// close the socket
+// https://beej.us/guide/bgnet/html/index-wide.html#getaddrinfoprepare-to-launch
+// https://beej.us/guide/bgnet/source/examples/client.c
 
 
 int client(void) {
@@ -53,8 +47,12 @@ int client(void) {
         exit(EXIT_FAILURE);
     }
 
-    int se = send(s, "Hello World!\n", 12, 0);
-    if (se == -1) {
+    char *msg = "Hello World, Beej was here\n";
+    int bytes_send, len;
+    len = strlen(msg);
+
+    bytes_send = send(s, msg, len, 0);
+    if (bytes_send == -1) {
         perror("send()");
         close(s);
         freeaddrinfo(servinfo);

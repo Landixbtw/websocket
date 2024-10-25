@@ -19,4 +19,4 @@ broadcast the messages from one user to the other.
 
 ### The Websocket Client
 
-- The users can connect to the websocket server and send and receive messages in realtime
+- The users can connect to the websocket server and send and receive messages
