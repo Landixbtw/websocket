@@ -1,6 +1,22 @@
 Trying to create a websocket
 
-- What is a websocket ?
-- (How) can I use one to send messages over TCP/IP to another machine ?
-    -   Does this even happen over TCP/IP
-- Does one let the user decide a port ?
+- How do you choose the best port, can you let a user choose a port for the server ?
+
+---
+
+Goals:
+- Make the server create a connection for someone to connect to or ping.
+- Implement a client that can connect to the server. (like [this](https://beej.us/guide/bgnet/source/examples/showip.c) to test). 
+
+---
+
+### The Websocket Server
+
+- The Websocket server maintains all the open connections with the clients (users).
+- For an RTC (RealTime-Chat) the server would have to maintain the connection and 
+broadcast the messages from one user to the other.
+
+
+### The Websocket Client
+
+- The users can connect to the websocket server and send and receive messages in realtime
