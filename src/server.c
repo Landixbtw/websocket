@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <arpa/inet.h>
+#include <wait.h>
+#include <signal.h>
 
 
 // https://beej.us/guide/bgnet/source/examples/server.c
@@ -16,9 +18,10 @@
 #define BACKLOG 10
 #define PORT "3490"
 
-
 void *valid_ll_servinfo(struct addrinfo *linked_list);
 void *get_in_addr(struct sockaddr *sa);
+void sigchld_handler(int s);
+
 
 int main(void)
 {
@@ -37,6 +40,8 @@ int main(void)
     // IPv6 Address string len
     char s[INET6_ADDRSTRLEN];
 
+    // sigaction, "action to be taken when a signal arrives"
+    struct sigaction sa;
     // This will make sure that the hints struct is empty before using it
     memset(&hints, 0, sizeof(hints));
 
@@ -69,6 +74,11 @@ int main(void)
     //specifies the protocol for the returned socket addresses, 0 indicates that the socket addresses with any protocol can be returned
     hints.ai_protocol = 0;
 
+    // We are just getting the local ip address of the server so that you can connect to it from the network
+    char *ip_grep= "ip a| grep -Eo 'inet (addr:)?([0-9]*\\.){3}[0-9]*' | grep -Eo '([0-9]*\\.){3}[0-9]*' | grep -v '127.0.0.1'";
+
+    const int SYSTEM_IP = system(ip_grep);
+
     /*
      * for getaddrinfo() function
      * @param name: website link or IP e.g www.google.com / 8.8.8.8
@@ -77,7 +87,7 @@ int main(void)
      * https://stackoverflow.com/questions/23401147/what-is-the-difference-between-struct-addrinfo-and-struct-sockaddr
     */
 
-    if ((status = getaddrinfo("localhost", PORT, &hints, &servinfo)) != 0)
+    if ((status = getaddrinfo((char *) SYSTEM_IP, PORT, &hints, &servinfo)) != 0)
     {
         fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
         exit(EXIT_FAILURE);
@@ -146,6 +156,7 @@ int main(void)
         break;
     }
 
+    // Since servinfo is a linked list we need to free it at the end.
     freeaddrinfo(servinfo);
 
     if (p == NULL) 
@@ -165,8 +176,25 @@ int main(void)
         exit(EXIT_FAILURE);
     }
 
-    // TODO: reap all dead processes
+    /*
+     * -- reaping all dead processes --
+     * reaping means cleaning up terminated child processes, this is kinda like a automatic cleaning crew for dead child processes
+     * sigemptyset() initializes a so called signal mask to empty, the mask determines which signal should be blocked while the handler is running.
+     * SA_RESTART tells the system to auto restart system calls that were interupted by the signal handler.
+     * sigaction() install the handler, 
+     * @param sig: SIGCHLD is the signal that is sent when a child process is being terminated. 
+     * @param act: This is the configure signal action structure
+     * @param oact: NULL means that we dont care about the previous signal handler
+     */
 
+    sa.sa_handler = sigchld_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGCHLD, &sa, NULL) == -1)
+    {
+        perror("sigaction()");
+        exit(EXIT_FAILURE);
+    }
 
     printf("server: waiting for connections...\n");
 
@@ -200,9 +228,11 @@ int main(void)
          */ 
         if (!fork()) 
         {
+            char *msg = "Welcome on the [Websocket]";
+            int len = strlen(msg);
             // the child process doesnt need the listener, we have new_fd
             close(s_fd);
-            if (send(new_fd, "Hello World\n", 13, 0) == -1)
+            if (send(new_fd, msg, len , 0) == -1)
             {
                 perror("server: send");
             }
@@ -236,8 +266,6 @@ int main(void)
         printf("The client has closed the connection\n");
     }
 
-    // Since servinfo is a linked list we need to free it at the end.
-    // freeaddrinfo(servinfo);  
     return 0;
 }
 
@@ -287,4 +315,16 @@ void *get_in_addr(struct sockaddr *sa)
     }
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+
+void sigchld_handler(int s)
+{
+    (void)s;
+    // waitpid() might overwrite errno so we save errno
+    int saved_errno = errno;
+
+    while(waitpid(-1, NULL, WNOHANG) > 0);
+
+    errno = saved_errno;
 }

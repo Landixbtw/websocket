@@ -83,15 +83,15 @@ int main(int argc, char *argv[]) {
     // we dont need the linked list anymore so we free it
     freeaddrinfo(servinfo);
 
-        // we receive the message the server sent
-        if ((numbytes = recv(s_fd, buf, MAXDATASIZE, 0)) == -1)
-        {
-            perror("client: recv");
-            exit(EXIT_FAILURE);
-        }
+    // we receive the message the server sent
+    if ((numbytes = recv(s_fd, buf, MAXDATASIZE, 0)) == -1)
+    {
+        perror("client: recv");
+        exit(EXIT_FAILURE);
+    }
 
-        // Null terminate the string
-        buf[numbytes] = '\0';
+    // Null terminate the string
+    buf[numbytes] = '\0';
 
 
     printf("client: received '%s' \n", buf);

@@ -1,14 +1,9 @@
 Trying to create a websocket
 
-- How do you choose the best port, can you let a user choose a port for the server ?
+- You can now connect to the server from any machine in your local network
+- The server send a nice message to the client when connecting. 
 
----
-
-Goals:
-- Make the server create a connection for someone to connect to or ping.
-- Implement a client that can connect to the server. (like [this](https://beej.us/guide/bgnet/source/examples/showip.c) to test). 
-
----
+- How can we keep the client "online", right now it closes after receiving the message.
 
 ### The Websocket Server
 

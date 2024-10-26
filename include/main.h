@@ -10,7 +10,7 @@
 void show_usage(char *PROGRAM_NAME)
 {
     fprintf(stdout, 
-            "Usage: \e[1m%s [server hostname]\e[0m\n", PROGRAM_NAME);
+            "Usage: \e[1m%s [server hostname / server host address]\e[0m\n", PROGRAM_NAME);
 }
 
 #endif //MAIN_H
