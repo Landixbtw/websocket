@@ -5,11 +5,12 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-#include <netdb.h>
+#include <stdio.h>
 
-void valid_ll_servinfo(struct addrinfo *linked_list);
-int server(void);
-int client(void);
-
+void show_usage(char *PROGRAM_NAME)
+{
+    fprintf(stdout, 
+            "Usage: \e[1m%s [server hostname]\e[0m\n", PROGRAM_NAME);
+}
 
 #endif //MAIN_H
