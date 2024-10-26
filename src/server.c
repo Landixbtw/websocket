@@ -273,7 +273,7 @@ void *valid_ll_servinfo(struct addrinfo *linked_list)
                 ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
     }
     /* 
-    * This casts ptr to the a struct sockaddr_in *ptr and then access the address, 
+    * This casts ptr to the struct sockaddr_in *ptr and then access the address,
     * where the struct sockaddr_in *ptr->sin_addr is pointing at
     */    return &(((struct sockaddr_in*)ptr)->sin_addr);
 }
