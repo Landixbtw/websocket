@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <wait.h>
 #include <signal.h>
+#include <poll.h>
 
 
 // https://beej.us/guide/bgnet/source/examples/server.c
@@ -21,7 +22,8 @@
 void *valid_ll_servinfo(struct addrinfo *linked_list);
 void *get_in_addr(struct sockaddr *sa);
 void sigchld_handler(int s);
-
+void add_to_pfds(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size);
+void del_from_pfds(struct pollfd *pfds[], int i, int *fd_count);
 
 int main(void)
 {
@@ -33,7 +35,7 @@ int main(void)
     struct sockaddr_storage client_addr;
 
     // Client address socket length
-    socklen_t addr_size; 
+    socklen_t addr_size;
     // servinfo will point to the result of getaddrinfo
     struct addrinfo hints, *servinfo, *p;
 
@@ -89,8 +91,8 @@ int main(void)
 
     if ((status = getaddrinfo((char *) SYSTEM_IP, PORT, &hints, &servinfo)) != 0)
     {
-        fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
-        exit(EXIT_FAILURE);
+      fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+      exit(EXIT_FAILURE);
     }
     printf("Websocket Server started\n");
 
@@ -198,7 +200,8 @@ int main(void)
 
     printf("server: waiting for connections...\n");
 
-    while(1)
+    // NOTE: listener -> s_fd
+    for(;;)
     {
         addr_size = sizeof client_addr;
         /*
@@ -226,6 +229,7 @@ int main(void)
          * if fork returns 0 a new child process has been created
          * the child process will now independently handle the connection
          */ 
+        // Why was it !fork()?
         if (!fork()) 
         {
             char *msg = "Welcome on the [Websocket]";
@@ -266,6 +270,7 @@ int main(void)
         printf("The client has closed the connection\n");
     }
 
+    close(s_fd);
     return 0;
 }
 
@@ -327,4 +332,46 @@ void sigchld_handler(int s)
     while(waitpid(-1, NULL, WNOHANG) > 0);
 
     errno = saved_errno;
+}
+
+
+void add_to_pfds(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size)
+{
+    // we want to dynamically add more entries if needed
+    // we can do that with realloc
+    //
+    // first we want to check if we have enough space
+    // if (not enough room in the array)
+    //      make array bigger
+    //      realloc the size
+    //
+    //  
+    // we need to increase the fd_count because we added a new one
+}
+
+
+void del_from_pfds(struct pollfd *pfds[], int i, int *fd_count)
+{
+    // we want to copy the last element over the one we want to remove and shrink the list by one at the end
+    /*
+     * Before (fd_count = 4):
+     * pfds[0]: fd1 
+     * pfds[1]: fd2  <- want to delete this (i = 1) 
+     * pfds[2]: fd3 
+     * pfds[3]: fd4 
+     *
+     * Step 1: pfds[1] = pfds[3] 
+     * pfds[0]: fd1 
+     * pfds[1]: fd4  <- copied from end 
+     * pfds[2]: fd3 
+     * pfds[3]: fd4  <- not needed anymore 
+     * Step 2: fd_count-- 
+     * now fd_count = 3, effectively making the last element inaccessible
+     *
+     * we can use I like this because this function will later be used in a for loop
+    */
+
+    pfds[i] = pfds[*fd_count - 1];
+
+    (*fd_count)--;
 }

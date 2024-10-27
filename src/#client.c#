@@ -1,19 +1,15 @@
 //
 // Created by ole on 25.10.24.
 //
-#include <signal.h>
+#include <cassert>
 #include <stdio.h>
 #include <stdlib.h>
-#include <netdb.h>
-#include <string.h>
-#include <sys/poll.h>
-#include <unistd.h>
-#include <poll.h>
-
-#include <netinet/in.h>
-
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
+#include <string.h>
+#include <unistd.h>
+#include <netinet/in.h>
 
 #include <arpa/inet.h>
 
@@ -107,7 +103,13 @@ int main(int argc, char *argv[]) {
      *
      *  We cant use scanf() because the program is paused while scanf is waiting for input
      *
-     * We want to use poll(), not select() this is apparently the old way
+     * -- select() --
+     *  - select lets you monitor multiple file descriptors (sockets, stdin)
+     *  - this function can tell us when 
+     *      - Data is available to be read from socket 
+     *      - The user has typed something
+     *  - select wont block if you set a timeout
+     *  
      *
      */
 
@@ -126,73 +128,6 @@ int main(int argc, char *argv[]) {
 
 
     printf("client: received '%s' \n", buf);
-
-
-    /*
-     * -- this allows for synchronous I/O Multiplexing --
-     * @param fds[]: array of information (sockets to monitor)
-     * @param nfds: count of elements in the array
-     * @param timeout: timeout in milliseconds
-     * poll returns number of elements which have had an event occur
-     */
-
-    /*
-     * this is for polling
-     * we start with 5 connections we can realloc if more are necessary
-     */
-    int fd_count = 0;
-    int fd_size = 5;
-
-    /*
-     * struct pollfd { 
-     * int fd;         // the socket descriptor 
-     * short events;   // bitmap of events we're interested in 
-     * short revents;  // when poll() returns, bitmap of events that occurred 
-     * };
-     */
-    struct pollfd *pfds = malloc(sizeof *pfds * fd_size);
-
-    pfds[0].fd = 0; // stdin
-    pfds[0].events = POLLIN; // tell me when ready to read
-
-
-    fd_count = 1;
-
-    for (;;)
-    {
-        // timeout -1 means wait forever
-        int poll_event = poll(pfds, fd_count, -1);
-
-        // right now it should never timeout because timeout is -1
-        if (poll_event == 0) printf("Poll timed out\n");
-        if (poll_event == -1) perror("client: poll()");
-        else {
-            /*
-             *  .revents contains the event that occured in this case POLLIN 
-             *  with the bitwise and (&) we are setting it to the correct int 
-             *  if the same bit is in both
-             *
-             *  (These bits are not represantitive only an example)
-             *  revents:  00001001    (POLLIN bit is 1) 
-             *  POLLIN:   00000001 
-             *  result:   00000001    (non-zero, so polling_happened is true)
-             */
-            int polling_happened = pfds[0].revents & POLLIN;
-
-            /* 
-             * on success a positve number is returned, 0 indicates timeout, -1 error
-             * apparently non zero numbers mean true, zero is false
-             */
-            if (polling_happened)
-            {
-                printf("File descriptor %d is ready to read\n", pfds[0].fd);
-            } else {
-                printf("Unexpected event occured: %d \n", pfds[0].revents);
-                break;
-            }
-        }
-    }
-
     close(s_fd);
 
     return 0;
