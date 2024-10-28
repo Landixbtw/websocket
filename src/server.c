@@ -28,7 +28,7 @@ void del_from_pfds(struct pollfd *pfds[], int i, int *fd_count);
 int main(void)
 {
     // We start linstening on s_fd (sockfd), and all new connection go on new_fd
-    int status, s_fd, new_fd;
+    int status, s_fd, new_fd, fd_size, fd_count;
     int const yes=1;
 
     // TODO: ???
@@ -200,29 +200,80 @@ int main(void)
 
     printf("server: waiting for connections...\n");
 
+    fd_count = 0;
+    fd_size = 5;
+
+    struct pollfd *pfds = malloc(sizeof *pfds * fd_size);
     // NOTE: listener -> s_fd
+    pfds[0].fd = s_fd;
+    pfds[0].events = POLLIN;
+
+    fd_count = 1;
+
+
     for(;;)
     {
-        addr_size = sizeof client_addr;
-        /*
-         * When a new client connects accept() return a new file descriptor (new_fd) and fills it with the client address
-         * for communicating with the new client
-         */
-        new_fd = accept(s_fd, (struct sockaddr *)&client_addr, &addr_size);
-        if (new_fd == -1)
-        {
-            perror("accept()");
-            continue;
-        }
+        int poll_event = poll(pfds, fd_count, -1);
 
-        /*
-         * inet_ntop converts the client IP address from binary to a readable string
-         * get_in_addr is explained in the implemenation
-         * The resulting address is stored in s
-         */
-        inet_ntop(client_addr.ss_family, 
-                  get_in_addr((struct sockaddr *)&client_addr), s, sizeof s);
-        printf("server got connection from %s\n", s);
+        if (poll_event == -1) perror("server: poll()"); exit(EXIT_FAILURE);
+        if (poll_event == 0) perror("server: poll()"); // poll time out
+
+        for (int i = 0; i < fd_count; i++) 
+        {
+
+            if (pfds[i].revents && POLLIN)
+            {
+                if (pfds[i].fd == s_fd)
+                {
+                    addr_size = sizeof client_addr;
+                    /*
+                     * When a new client connects accept() return a new file descriptor (new_fd) and fills it with the client address
+                     * for communicating with the new client
+                     */
+                    new_fd = accept(s_fd, (struct sockaddr *)&client_addr, 
+                                    &addr_size);
+                    if (new_fd == -1)
+                    {
+                        perror("accept()");
+                        continue;
+                    } else {
+                        add_to_pfds(&pfds, new_fd, &fd_count, &fd_size);
+
+                        /*
+                         * inet_ntop converts the client IP address from binary to a readable string
+                         * get_in_addr is explained in the implemenation
+                         * The resulting address is stored in s
+                         */
+                        inet_ntop(client_addr.ss_family, 
+                                  get_in_addr((struct sockaddr *)&client_addr),
+                                  s, sizeof s);
+                        printf("server got connection from %s\n", s);
+                    }
+                } else {
+                    /*
+                     * the server obv also need to be able to receive something. So after 
+                     * accepting the request from the client we can receive messages
+                     * @param socket: The socket 
+                     * @param buffer: Points to a buffer where the message should be stored
+                     * @param length: length of the buffer in bytes.
+                     * @param flags: type of message reception. (MSG_PEEK. Data is treated as 
+                     * unread, next recv or similar function can still return the data)
+                     */
+
+                    char *buf = malloc(sizeof(char) * 50);
+                    int bytes_received, len;
+                    len = strlen(buf);
+
+                    bytes_received = recv(s_fd, &buf, len, 0);
+                    if (bytes_received == -1)
+                    {
+                        perror("recv()");
+                    } else if (bytes_received == 0){
+                        printf("The client has closed the connection\n");
+                    }
+
+            }
+        }
 
         /*
          * fork() creates a child process to handle the new client connection
@@ -247,28 +298,6 @@ int main(void)
         close(new_fd);
     }
 
-
-    /*
-     * the server obv also need to be able to receive something. So after 
-     * accepting the request from the client we can receive messages
-     * @param socket: The socket 
-     * @param buffer: Points to a buffer where the message should be stored
-     * @param length: length of the buffer in bytes.
-     * @param flags: type of message reception. (MSG_PEEK. Data is treated as 
-     * unread, next recv or similar function can still return the data)
-     */
-
-    char *buf = malloc(sizeof(char) * 50);
-    int bytes_received, len;
-    len = strlen(buf);
-
-    bytes_received = recv(s_fd, &buf, len, 0);
-    if (bytes_received == -1)
-    {
-        perror("recv()");
-    } else if (bytes_received == 0){
-        printf("The client has closed the connection\n");
-    }
 
     close(s_fd);
     return 0;
@@ -335,7 +364,7 @@ void sigchld_handler(int s)
 }
 
 
-void add_to_pfds(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size)
+void add_to_pfds(struct pollfd *pfds[], int new_fd, int *fd_count, int *fd_size)
 {
     // we want to dynamically add more entries if needed
     // we can do that with realloc
@@ -347,6 +376,20 @@ void add_to_pfds(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size)
     //
     //  
     // we need to increase the fd_count because we added a new one
+    if (*fd_count == *fd_size) {
+        *fd_size *= 2;
+
+        *pfds = realloc(*pfds, sizeof(struct pollfd) * (*fd_size));
+    }
+
+    /*
+     *  because of pfds declaration we need to dereference the pointer.
+     *  (*pfds) gets the pointer, and *fd_count is I 
+     */
+    (*pfds)[*fd_count].fd = new_fd;
+    (*pfds)[*fd_size].events = POLLIN;
+
+    (*fd_count)++;
 }
 
 

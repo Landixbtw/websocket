@@ -163,25 +163,25 @@ int main(int argc, char *argv[]) {
         // timeout -1 means wait forever
         int poll_event = poll(pfds, fd_count, -1);
 
-        // right now it should never timeout because timeout is -1
+        // right now it should never time out because timeout is -1
         if (poll_event == 0) printf("Poll timed out\n");
         if (poll_event == -1) perror("client: poll()");
         else {
             /*
-             *  .revents contains the event that occured in this case POLLIN 
-             *  with the bitwise and (&) we are setting it to the correct int 
+             *  .revents contains the event that occurred in this case POLLIN
+             *  with the bitwise and (&) we are setting it to the correct int
              *  if the same bit is in both
              *
-             *  (These bits are not represantitive only an example)
-             *  revents:  00001001    (POLLIN bit is 1) 
-             *  POLLIN:   00000001 
+             *  (These bits are not representative only an example)
+             *  revents:  00001001    (POLLIN bit is 1)
+             *  POLLIN:   00000001
              *  result:   00000001    (non-zero, so polling_happened is true)
              */
             int polling_happened = pfds[0].revents & POLLIN;
 
-            /* 
-             * on success a positve number is returned, 0 indicates timeout, -1 error
-             * apparently non zero numbers mean true, zero is false
+            /*
+             * on success a positive number is returned, 0 indicates timeout, -1 error
+             * apparently non-zero numbers mean true, zero is false
              */
             if (polling_happened)
             {
@@ -215,6 +215,5 @@ void *get_in_addr(struct sockaddr *sa)
 
 void show_usage(char *program_name)
 {
-    fprintf(stdout, 
-            "Usage: \e[1m%s [server hostname / server host address]\e[0m\n", program_name);
+    printf("Usage: \e[1m%s [server hostname / server host address]\e[0m\n", program_name);
 }
