@@ -10,14 +10,14 @@ inc_dir = include_directories('include')
 
 executable(
    'server', 
-['src/server.c'],
+['src/server.c', 'src/utils.c'],
 include_directories: inc_dir,
 build_by_default: true,
 )
 
 executable(
   'client',
-['src/client.c'],
+['src/client.c', 'src/utils.c'],
 include_directories: inc_dir,
 build_by_default: true,
 )

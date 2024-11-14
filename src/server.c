@@ -6,12 +6,12 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h>
-#include <errno.h>
 #include <arpa/inet.h>
 #include <wait.h>
 #include <signal.h>
 #include <poll.h>
 
+#include "../include/utils.h"
 
 // https://beej.us/guide/bgnet/source/examples/server.c
 // https://beej.us/guide/bgnet/html/index-wide.html#getaddrinfoprepare-to-launch
@@ -19,9 +19,7 @@
 #define BACKLOG 10
 #define PORT "3490"
 
-void *valid_ll_servinfo(struct addrinfo *linked_list);
 void *get_in_addr(struct sockaddr *sa);
-void sigchld_handler(int s);
 void add_to_pfds(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size);
 void del_from_pfds(struct pollfd *pfds[], int i, int *fd_count);
 
@@ -77,8 +75,7 @@ int main(void)
     hints.ai_protocol = 0;
 
     // We are just getting the local ip address of the server so that you can connect to it from the network
-    char *ip_grep= "ip a| grep -Eo 'inet (addr:)?([0-9]*\\.){3}[0-9]*' | grep -Eo '([0-9]*\\.){3}[0-9]*' | grep -v '127.0.0.1'";
-
+        char *ip_grep = "ip a | grep -v 'docker0' | grep -Eo 'inet (addr:)?([0-9]*\\.){3}[0-9]*' | grep -Eo '([0-9]*\\.){3}[0-9]*' | grep -v '127.0.0.1' | head -n 1";
     const int SYSTEM_IP = system(ip_grep);
 
     /*
@@ -304,65 +301,6 @@ int main(void)
 }
 
 
-// This function returns the last valid ptr address that matches all 3 checks
-
-void *valid_ll_servinfo(struct addrinfo *linked_list)
-{
-    struct addrinfo *ptr;
-
-    // This steps through the linked list one at a time
-    for (ptr = linked_list; ptr != NULL; ptr = ptr->ai_next) {
-
-        // Check the address family
-        if (ptr->ai_family != AF_INET && ptr->ai_family != AF_INET6) {
-            fprintf(stderr, "Invalid address family: %d\n", ptr->ai_family);
-            continue;
-        }
-
-        // Check the socket type
-        if (ptr->ai_socktype != SOCK_STREAM) {
-            fprintf(stderr, "Invalid socket type: %d\n", ptr->ai_socktype);
-            continue;
-        }
-
-        // Check the protocol
-        if (ptr->ai_protocol != 0 && ptr->ai_protocol != IPPROTO_TCP) {
-            fprintf(stderr, "Invalid protocol: %d\n", ptr->ai_protocol);
-            continue;
-        }
-
-        printf("Valid entry found: family=%d, socktype:%d, protocol:%d\n",
-                ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-    }
-    /* 
-    * This casts ptr to the struct sockaddr_in *ptr and then access the address,
-    * where the struct sockaddr_in *ptr->sin_addr is pointing at
-    */    return &(((struct sockaddr_in*)ptr)->sin_addr);
-}
-
-
-// get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
-
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
-
-
-void sigchld_handler(int s)
-{
-    (void)s;
-    // waitpid() might overwrite errno so we save errno
-    int saved_errno = errno;
-
-    while(waitpid(-1, NULL, WNOHANG) > 0);
-
-    errno = saved_errno;
-}
-
 
 void add_to_pfds(struct pollfd *pfds[], int new_fd, int *fd_count, int *fd_size)
 {
@@ -417,4 +355,5 @@ void del_from_pfds(struct pollfd *pfds[], int i, int *fd_count)
     pfds[i] = pfds[*fd_count - 1];
 
     (*fd_count)--;
+    }
 }

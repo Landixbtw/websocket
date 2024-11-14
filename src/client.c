@@ -1,7 +1,6 @@
 //
 // Created by ole on 25.10.24.
 //
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <netdb.h>
@@ -17,6 +16,8 @@
 
 #include <arpa/inet.h>
 
+#include "../include/utils.h"
+
 // https://beej.us/guide/bgnet/html/index-wide.html#getaddrinfoprepare-to-launch
 // https://beej.us/guide/bgnet/source/examples/client.c
 
@@ -26,10 +27,9 @@
 #define PROGRAM_NAME "./websock"
 
 void *get_in_addr(struct sockaddr *sa);
-void show_usage(char *program_name);
 
 int main(int argc, char *argv[]) {
-
+  
     int status, s_fd, numbytes;
     struct addrinfo hints, *servinfo, *p;
     // buffer for recv()
@@ -112,22 +112,6 @@ int main(int argc, char *argv[]) {
      */
 
 
-    // we receive the message the server sent
-    if ((numbytes = recv(s_fd, buf, MAXDATASIZE, 0)) == -1)
-    {
-        perror("client: recv");
-        exit(EXIT_FAILURE);
-    }
-
-    if (numbytes == 0) printf("client: server has disconnected\n");
-
-    // Null terminate the string
-    buf[numbytes] = '\0';
-
-
-    printf("client: received '%s' \n", buf);
-
-
     /*
      * -- this allows for synchronous I/O Multiplexing --
      * @param fds[]: array of information (sockets to monitor)
@@ -160,6 +144,24 @@ int main(int argc, char *argv[]) {
 
     for (;;)
     {
+
+        // https://sysadminsage.com/recv-failure-connection-reset-by-peer/
+        // https://stackoverflow.com/questions/40621899/c-socket-recv-connection-reset-by-peer
+
+        // we receive the message the server sent
+        if ((numbytes = recv(s_fd, buf, MAXDATASIZE, 0)) == -1)
+        {
+            perror("client: recv");
+            break;
+        }
+
+        if (numbytes == 0) printf("client: server has disconnected\n");
+
+        // Null terminate the string
+        buf[numbytes] = '\0';
+
+        printf("client: received '%s' \n", buf);
+
         // timeout -1 means wait forever
         int poll_event = poll(pfds, fd_count, -1);
 
@@ -198,22 +200,3 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-
-
-/*
- * If the the sockaddr data in the sockaddr points to AF_INET we return the IPv4 address
- * If not we return the IPv6 address
- */
-void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_data == AF_INET)
-    {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
-
-void show_usage(char *program_name)
-{
-    printf("Usage: \e[1m%s [server hostname / server host address]\e[0m\n", program_name);
-}
