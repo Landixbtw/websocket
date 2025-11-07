@@ -24,12 +24,12 @@
 #define PORT "3490"
 // max number of bytes we can get at once
 #define MAXDATASIZE 100
-#define PROGRAM_NAME "./websock"
 
 void *get_in_addr(struct sockaddr *sa);
 
-int main(int argc, char *argv[]) {
-  
+int main(int argc, char *argv[])
+{
+
     int status, s_fd, numbytes;
     struct addrinfo hints, *servinfo, *p;
     // buffer for recv()
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
 
     if (argc != 2)
     {
-        show_usage(PROGRAM_NAME);
+        printf("Usage: \e[1m%s [server host address]\e[0m\n", argv[0]);
         exit(1);
     }
 
@@ -48,6 +48,7 @@ int main(int argc, char *argv[]) {
 
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
 
     printf("trying to connect to: %s\n", argv[1]);
     if ((status = getaddrinfo(argv[1], PORT , &hints, &servinfo)) != 0) {
@@ -65,11 +66,13 @@ int main(int argc, char *argv[]) {
             continue;
         }
         // then we connect to the socket, we just created 
+
+        // TODO: ip addr might not be init correctly
+        printf("hostname: %s\n", p->ai_canonname);
         if (connect(s_fd, p->ai_addr, p->ai_addrlen) == -1)
         {
             close(s_fd);
             perror("client: connect()");
-            continue;
         }
         break;
     }
@@ -82,7 +85,8 @@ int main(int argc, char *argv[]) {
 
     // inet_ntop converts the IP address from binary to a readable string
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
-    printf("client: connecting to %s\n", s);
+    // FIX: This prints the ip to connect to as 0.0.0.0
+    printf("client: connecting to %s on port %s\n", s, PORT);
 
     // we dont need the linked list anymore so we free it
     freeaddrinfo(servinfo);
@@ -139,7 +143,6 @@ int main(int argc, char *argv[]) {
     pfds[0].fd = 0; // stdin
     pfds[0].events = POLLIN; // tell me when ready to read
 
-
     fd_count = 1;
 
     for (;;)
@@ -147,20 +150,6 @@ int main(int argc, char *argv[]) {
 
         // https://sysadminsage.com/recv-failure-connection-reset-by-peer/
         // https://stackoverflow.com/questions/40621899/c-socket-recv-connection-reset-by-peer
-
-        // we receive the message the server sent
-        if ((numbytes = recv(s_fd, buf, MAXDATASIZE, 0)) == -1)
-        {
-            perror("client: recv");
-            break;
-        }
-
-        if (numbytes == 0) printf("client: server has disconnected\n");
-
-        // Null terminate the string
-        buf[numbytes] = '\0';
-
-        printf("client: received '%s' \n", buf);
 
         // timeout -1 means wait forever
         int poll_event = poll(pfds, fd_count, -1);
@@ -185,7 +174,7 @@ int main(int argc, char *argv[]) {
              * on success a positive number is returned, 0 indicates timeout, -1 error
              * apparently non-zero numbers mean true, zero is false
              */
-            if (polling_happened)
+            if (polling_happened > 0)
             {
                 printf("File descriptor %d is ready to read\n", pfds[0].fd);
             } else {
@@ -193,8 +182,27 @@ int main(int argc, char *argv[]) {
                 break;
             }
         }
+        // we receive the message the server sent
+        if ((numbytes = recv(s_fd, buf, MAXDATASIZE, 0)) == -1)
+        {
+            switch(numbytes) 
+            {
+                case(EAGAIN | EWOULDBLOCK): continue;
+                case(ENOTSOCK): fprintf(stderr, "error: this is not a socket: %s", strerror(errno)); break;
+                default: perror("client: recv"); break;
+            }
+        }
+
+        if (numbytes == 0) printf("client: server has disconnected\n"); break;
+
+        // Null terminate the string
+        buf[numbytes] = '\0';
+
+        printf("client: received '%s' \n", buf);
+
     }
 
+    free(pfds);
     close(s_fd);
 
     return 0;

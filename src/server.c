@@ -75,7 +75,7 @@ int main(void)
     hints.ai_protocol = 0;
 
     // We are just getting the local ip address of the server so that you can connect to it from the network
-        char *ip_grep = "ip a | grep -v 'docker0' | grep -Eo 'inet (addr:)?([0-9]*\\.){3}[0-9]*' | grep -Eo '([0-9]*\\.){3}[0-9]*' | grep -v '127.0.0.1' | head -n 1";
+    char *ip_grep = "ip a | grep -v 'docker0' | grep -Eo 'inet (addr:)?([0-9]*\\.){3}[0-9]*' | grep -Eo '([0-9]*\\.){3}[0-9]*' | grep -v '127.0.0.1' | head -n 1";
     const int SYSTEM_IP = system(ip_grep);
 
     /*
@@ -91,7 +91,8 @@ int main(void)
       fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
       exit(EXIT_FAILURE);
     }
-    printf("Websocket Server started\n");
+
+    printf("Server started\n");
 
     /*
      * servinfo now points to a linked list of atleast 1 struct addrinfo
@@ -140,7 +141,8 @@ int main(void)
 
         /*
          * @param fd: is the socket file descriptor that is returned by socket().
-         * @param *addr: is the pointer to a struct sockaddr, that contains the information about the address. (Port, IP, ...)
+         * @param *addr: is the pointer to a struct sockaddr, that contains the 
+         * information about the address. (Port, IP, ...)
          * @param len: is the length of bytes of that address,
          */
 
@@ -151,7 +153,6 @@ int main(void)
             perror("server: bind()");
             continue;
         }
-
         break;
     }
 
@@ -207,12 +208,11 @@ int main(void)
 
     fd_count = 1;
 
-
     for(;;)
     {
         int poll_event = poll(pfds, fd_count, -1);
 
-        if (poll_event == -1) perror("server: poll()"); exit(EXIT_FAILURE);
+        if (poll_event == -1) perror("server: poll()"); (EXIT_FAILURE);
         if (poll_event == 0) perror("server: poll()"); // poll time out
 
         for (int i = 0; i < fd_count; i++) 
@@ -268,7 +268,6 @@ int main(void)
                     } else if (bytes_received == 0){
                         printf("The client has closed the connection\n");
                     }
-
             }
         }
 

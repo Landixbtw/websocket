@@ -59,7 +59,7 @@ void sigchld_handler(int s)
  */
 void *get_in_addr(struct sockaddr *sa)
 {
-    if (sa->sa_data == AF_INET)
+    if (sa->sa_family == AF_INET)
     {
         return &(((struct sockaddr_in*)sa)->sin_addr);
     }
