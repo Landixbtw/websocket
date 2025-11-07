@@ -1,3 +1,5 @@
+# on hold school takes too much time right now
+
 Trying to create a websocket
 
 - You can now connect to the server from any machine in your local network
