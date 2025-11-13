@@ -22,5 +22,7 @@ void *valid_ll_servinfo(struct addrinfo *linked_list);
 void show_usage(char *program_name);
 void sigchld_handler(int s);
 void *get_in_addr(struct sockaddr *sa);
+char *custom_getline(void);
+
 
 #endif 

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/poll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -18,6 +19,7 @@
 
 #define BACKLOG 10
 #define PORT "3490"
+#define LISTENER_INDEX 1
 
 void *get_in_addr(struct sockaddr *sa);
 void add_to_pfds(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size);
@@ -202,13 +204,24 @@ int main(void)
     fd_size = 5;
 
     struct pollfd *pfds = malloc(sizeof *pfds * fd_size);
+    
+    if(pfds == NULL)
+    {
+        perror("server: ");
+    }
+
     // NOTE: listener -> s_fd
-    pfds[0].fd = s_fd;
-    pfds[0].events = POLLIN;
+    pfds[0].fd = 0;
+    pfds[0].events = POLLIN; // we want to read
 
-    fd_count = 1;
+    pfds[LISTENER_INDEX].fd = s_fd; 
+    pfds[LISTENER_INDEX].events = POLLIN; 
 
-    for(;;)
+    fd_count = 2;
+
+    // NOTE: Right now we try get it working for one client. Expand to n later
+
+    while(1)
     {
         int poll_event = poll(pfds, fd_count, -1);
 
@@ -217,22 +230,21 @@ int main(void)
 
         for (int i = 0; i < fd_count; i++) 
         {
-
-            if (pfds[i].revents && POLLIN)
+            if (pfds[i].revents & POLLIN)
             {
-                if (pfds[i].fd == s_fd)
+                if(i == LISTENER_INDEX)
                 {
-                    addr_size = sizeof client_addr;
                     /*
                      * When a new client connects accept() return a new file descriptor (new_fd) and fills it with the client address
                      * for communicating with the new client
                      */
-                    new_fd = accept(s_fd, (struct sockaddr *)&client_addr, 
-                                    &addr_size);
+
+                    addr_size = sizeof client_addr;
+
+                    new_fd = accept(s_fd, (struct sockaddr *)&client_addr, &addr_size);
                     if (new_fd == -1)
                     {
                         perror("accept()");
-                        continue;
                     } else {
                         add_to_pfds(&pfds, new_fd, &fd_count, &fd_size);
 
@@ -244,10 +256,22 @@ int main(void)
                         inet_ntop(client_addr.ss_family, 
                                   get_in_addr((struct sockaddr *)&client_addr),
                                   s, sizeof s);
+
                         printf("server got connection from %s\n", s);
+
+                        char *msg = "Welcome on the [Websocket]";
+                        int len = strlen(msg);
+                        if (send(pfds[1].fd, msg, len , 0) == -1)
+                        {
+                            perror("server: send");
+                            exit(1);
+                        }
                     }
+                } else if (pfds[i].fd == STDIN_FILENO)
+                {
+                    // input from stdin, whyever
                 } else {
-                    /*
+                     /*
                      * the server obv also need to be able to receive something. So after 
                      * accepting the request from the client we can receive messages
                      * @param socket: The socket 
@@ -257,49 +281,35 @@ int main(void)
                      * unread, next recv or similar function can still return the data)
                      */
 
+                    // NOTE: After client connects, server kinda just quits, and does not accept or send any messages.
+
                     char *buf = malloc(sizeof(char) * 50);
+                    if(buf == NULL) 
+                    {
+                        perror("server: ");
+                    }
+
                     int bytes_received, len;
                     len = strlen(buf);
+
+                    if(s_fd == -1) fprintf(stderr, "fd is -1\n"); exit(1);
+                    if(s_fd > 0) fprintf(stderr, "fd is %i", s_fd );
 
                     bytes_received = recv(s_fd, &buf, len, 0);
                     if (bytes_received == -1)
                     {
                         perror("recv()");
-                    } else if (bytes_received == 0){
+                    } else if (bytes_received == 0)
+                    {
                         printf("The client has closed the connection\n");
                     }
             }
         }
-
-        /*
-         * fork() creates a child process to handle the new client connection
-         * if fork returns 0 a new child process has been created
-         * the child process will now independently handle the connection
-         */ 
-        // Why was it !fork()?
-        if (!fork()) 
-        {
-            char *msg = "Welcome on the [Websocket]";
-            int len = strlen(msg);
-            // the child process doesnt need the listener, we have new_fd
-            close(s_fd);
-            if (send(new_fd, msg, len , 0) == -1)
-            {
-                perror("server: send");
-            }
-            close(new_fd);
-            exit(0);
-        }
-        // the parent doesnt need this it has s_fd
-        close(new_fd);
     }
-
-
-    close(s_fd);
+        continue;
+    }
     return 0;
 }
-
-
 
 void add_to_pfds(struct pollfd *pfds[], int new_fd, int *fd_count, int *fd_size)
 {
@@ -315,16 +325,24 @@ void add_to_pfds(struct pollfd *pfds[], int new_fd, int *fd_count, int *fd_size)
     // we need to increase the fd_count because we added a new one
     if (*fd_count == *fd_size) {
         *fd_size *= 2;
-
-        *pfds = realloc(*pfds, sizeof(struct pollfd) * (*fd_size));
+    
+        struct pollfd *temp_pfds = realloc(*pfds, sizeof(struct pollfd) * (*fd_size));
+    
+        if (temp_pfds == NULL) {
+            perror("realloc failed");
+            *fd_size /= 2; // Revert size change
+            return; 
+        }
+        *pfds = temp_pfds;
     }
 
     /*
      *  because of pfds declaration we need to dereference the pointer.
      *  (*pfds) gets the pointer, and *fd_count is I 
      */
+
     (*pfds)[*fd_count].fd = new_fd;
-    (*pfds)[*fd_size].events = POLLIN;
+    (*pfds)[*fd_count].events = POLLIN;
 
     (*fd_count)++;
 }
@@ -354,5 +372,4 @@ void del_from_pfds(struct pollfd *pfds[], int i, int *fd_count)
     pfds[i] = pfds[*fd_count - 1];
 
     (*fd_count)--;
-    }
 }

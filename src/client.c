@@ -1,6 +1,7 @@
 //
 // Created by ole on 25.10.24.
 //
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <netdb.h>
@@ -23,7 +24,7 @@
 
 #define PORT "3490"
 // max number of bytes we can get at once
-#define MAXDATASIZE 100
+#define MAXDATASIZE 1024
 
 void *get_in_addr(struct sockaddr *sa);
 
@@ -60,6 +61,7 @@ int main(int argc, char *argv[])
     for (p = servinfo; p != NULL; p = p->ai_next)
     {
         /* this creates the client socket */
+        s_fd = 0;
         if ((s_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
         {
             perror("client: socket()");
@@ -85,7 +87,6 @@ int main(int argc, char *argv[])
 
     // inet_ntop converts the IP address from binary to a readable string
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
-    // FIX: This prints the ip to connect to as 0.0.0.0
     printf("client: connecting to %s on port %s\n", s, PORT);
 
     // we dont need the linked list anymore so we free it
@@ -107,6 +108,7 @@ int main(int argc, char *argv[])
      *
      * -- recv() blocking --
      *  when recv "blocks" it waits for data to arrive, 
+     *  --> Use non blocking?
      *  What happens while its waiting ? What can we do while it waits ?
      *
      *  We cant use scanf() because the program is paused while scanf is waiting for input
@@ -140,14 +142,19 @@ int main(int argc, char *argv[])
      */
     struct pollfd *pfds = malloc(sizeof *pfds * fd_size);
 
-    pfds[0].fd = 0; // stdin
-    pfds[0].events = POLLIN; // tell me when ready to read
+    // we need stdin from user, keyboard to send messages
+    //
 
-    fd_count = 1;
+    pfds[0].fd = 0;
+    pfds[0].events = POLLIN;
 
-    for (;;)
+    pfds[1].fd = s_fd; 
+    pfds[1].events = POLLIN; 
+
+    fd_count = 2;
+
+    while(1)
     {
-
         // https://sysadminsage.com/recv-failure-connection-reset-by-peer/
         // https://stackoverflow.com/questions/40621899/c-socket-recv-connection-reset-by-peer
 
@@ -157,49 +164,63 @@ int main(int argc, char *argv[])
         // right now it should never time out because timeout is -1
         if (poll_event == 0) printf("Poll timed out\n");
         if (poll_event == -1) perror("client: poll()");
-        else {
-            /*
-             *  .revents contains the event that occurred in this case POLLIN
-             *  with the bitwise and (&) we are setting it to the correct int
-             *  if the same bit is in both
-             *
-             *  (These bits are not representative only an example)
-             *  revents:  00001001    (POLLIN bit is 1)
-             *  POLLIN:   00000001
-             *  result:   00000001    (non-zero, so polling_happened is true)
-             */
-            int polling_happened = pfds[0].revents & POLLIN;
-
-            /*
-             * on success a positive number is returned, 0 indicates timeout, -1 error
-             * apparently non-zero numbers mean true, zero is false
-             */
-            if (polling_happened > 0)
-            {
-                printf("File descriptor %d is ready to read\n", pfds[0].fd);
-            } else {
-                printf("Unexpected event occured: %d \n", pfds[0].revents);
-                break;
-            }
-        }
-        // we receive the message the server sent
-        if ((numbytes = recv(s_fd, buf, MAXDATASIZE, 0)) == -1)
+        
+        if (poll_event > 0)
         {
-            switch(numbytes) 
+            for(int i = 0; i < fd_count; i++) 
             {
-                case(EAGAIN | EWOULDBLOCK): continue;
-                case(ENOTSOCK): fprintf(stderr, "error: this is not a socket: %s", strerror(errno)); break;
-                default: perror("client: recv"); break;
+                if(pfds[i].revents & POLLIN)
+                {
+                    if(pfds[0].fd == 0)
+                    {
+                        char *msg = custom_getline();
+                        if(msg == NULL)
+                        {
+                            fprintf(stderr, "msg is NULL\n");
+                            exit(1);
+                        }
+                        int len = strlen(msg+1);
+                        // check for EWOULDBLOCK || EAGAIN
+                        // save unsent data and set POLLOUT for next poll() call
+                        if (send(pfds[1].fd, msg, len , 0) == -1)
+                        {
+                            perror("server: send");
+                            break;
+                        } 
+                    } else if (pfds[i].fd == pfds[0].fd)
+                    {
+                        // we receive the message the server sent
+                        // TODO: Need different flags? Read up, after it works
+                        if ((numbytes = recv(s_fd, buf, MAXDATASIZE, 0)) == -1)
+                        {
+                            switch(numbytes) 
+                            {
+                                case(EAGAIN | EWOULDBLOCK): continue;
+                                case(ENOTSOCK): fprintf(stderr, "error: this is not a socket: %s", strerror(errno)); break;
+                                default: perror("client: recv"); break;
+                            }
+                        }
+
+                        fprintf(stderr, "numbytes: %i", numbytes);
+
+                        if (numbytes == 0) printf("client: server has disconnected\n"); break;
+
+                        // Null terminate the string
+                        buf[numbytes] = '\0';
+
+                        printf("client: received '%s' \n", buf);
+                    }
+                }
+                if(pfds[i].revents & POLLHUP)
+                {
+                    fprintf(stderr, "Hangup occured on device %i", i);
+                } else if (pfds[i].revents & POLLERR)
+                {
+                    // how can we check the error value? Errno is not set
+                    fprintf(stderr, "Error occured on device %i", i);
+                }
             }
-        }
-
-        if (numbytes == 0) printf("client: server has disconnected\n"); break;
-
-        // Null terminate the string
-        buf[numbytes] = '\0';
-
-        printf("client: received '%s' \n", buf);
-
+        } 
     }
 
     free(pfds);

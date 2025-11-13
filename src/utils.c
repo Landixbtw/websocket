@@ -67,4 +67,24 @@ void *get_in_addr(struct sockaddr *sa)
 }
 
 
+char *custom_getline(void)
+{
+    char *line = NULL;
+    size_t buffsize = 0;
 
+    if(getline(&line, &buffsize, stdin) == -1)
+    {
+        if(feof(stdin))
+        {
+            // EOF
+            free(line);
+            line = NULL;
+        } else {
+            perror("oshell: readline");
+            free(line);
+            line = NULL;
+            exit(EXIT_FAILURE);
+        }
+    }
+    return line;
+}
