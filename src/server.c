@@ -19,7 +19,7 @@
 
 #define BACKLOG 10
 #define PORT "3490"
-#define LISTENER_INDEX 1
+#define MAXDATASIZE 1024
 
 void *get_in_addr(struct sockaddr *sa);
 void add_to_pfds(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size);
@@ -27,8 +27,8 @@ void del_from_pfds(struct pollfd *pfds[], int i, int *fd_count);
 
 int main(void)
 {
-    // We start linstening on s_fd (sockfd), and all new connection go on new_fd
-    int status, s_fd, new_fd, fd_size, fd_count;
+    // We start linstening on sockfd (sockfd), and all new connection go on new_fd
+    int status, sockfd, new_fd, fd_size, fd_count;
     int const yes=1;
 
     // TODO: ???
@@ -112,7 +112,7 @@ int main(void)
          * @param type: specifies the socket type
          * @param protocol: specifies the socket protocol
          */
-        if ((s_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) 
+        if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) 
         {
             perror("server: socket()");
             continue;
@@ -128,7 +128,7 @@ int main(void)
          * @param optname: This report wether the rules used in validating addresses in bind() should allow the reuse of local addresses, if supported by the protocol
          * @param optval: This is the option (bool) you want to set for optname
          */
-        if (setsockopt(s_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
+        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
         {
             perror("setsockopt()");
             /* 
@@ -148,9 +148,9 @@ int main(void)
          * @param len: is the length of bytes of that address,
          */
 
-        if (bind(s_fd, servinfo->ai_addr, servinfo->ai_addrlen) == -1)
+        if (bind(sockfd, servinfo->ai_addr, servinfo->ai_addrlen) == -1)
         {
-            close(s_fd);
+            close(sockfd);
             // we print server: bind() so that we know the error happened server side.
             perror("server: bind()");
             continue;
@@ -172,7 +172,7 @@ int main(void)
      * @param fd: This is the socket we set earlier (s)
      * @param n: This is how many connection requests will be queued before further requests are refused
      */
-    if (listen(s_fd, BACKLOG) == -1)
+    if (listen(sockfd, BACKLOG) == -1)
     {
         perror("listen()");
         exit(EXIT_FAILURE);
@@ -200,7 +200,13 @@ int main(void)
 
     printf("server: waiting for connections...\n");
 
-    fd_count = 0;
+    /*
+     * this is for polling
+     * we start with 5 connections we can realloc if more are necessary
+     */
+
+
+    fd_count = 2;
     fd_size = 5;
 
     struct pollfd *pfds = malloc(sizeof *pfds * fd_size);
@@ -210,14 +216,13 @@ int main(void)
         perror("server: ");
     }
 
-    // NOTE: listener -> s_fd
+    // NOTE: listener -> sockfd
     pfds[0].fd = 0;
-    pfds[0].events = POLLIN; // we want to read
+    pfds[0].events = POLLIN; // Tell me when you are ready to read
 
-    pfds[LISTENER_INDEX].fd = s_fd; 
-    pfds[LISTENER_INDEX].events = POLLIN; 
+    pfds[1].fd = new_fd; 
+    pfds[1].events = POLLIN | POLLOUT;  // tell me when you are ready to read/write
 
-    fd_count = 2;
 
     // NOTE: Right now we try get it working for one client. Expand to n later
 
@@ -225,52 +230,72 @@ int main(void)
     {
         int poll_event = poll(pfds, fd_count, -1);
 
-        if (poll_event == -1) perror("server: poll()"); (EXIT_FAILURE);
+        if (poll_event == -1) 
+        {
+            perror("server: poll()"); 
+            exit(EXIT_FAILURE);
+        }
+
         if (poll_event == 0) perror("server: poll()"); // poll time out
 
-        for (int i = 0; i < fd_count; i++) 
+        if(poll_event > 0)
         {
-            if (pfds[i].revents & POLLIN)
+            /*
+             * When a new client connects accept() return a new file descriptor (new_fd) and fills it with the client address
+             * for communicating with the new client
+             */
+
+            addr_size = sizeof client_addr;
+
+            new_fd = accept(sockfd, (struct sockaddr *)&client_addr, &addr_size);
+            if (new_fd == -1)
             {
-                if(i == LISTENER_INDEX)
+                perror("accept()");
+            } else {
+                add_to_pfds(&pfds, new_fd, &fd_count, &fd_size);
+
+                /*
+                 * inet_ntop converts the client IP address from binary to a readable string
+                 * get_in_addr is explained in the implemenation
+                 * The resulting address is stored in s
+                 */
+                inet_ntop(client_addr.ss_family, 
+                          get_in_addr((struct sockaddr *)&client_addr),
+                          s, sizeof s);
+
+                printf("server got connection from %s\n", s);
+            }
+            for (int i = 0; i < fd_count; i++) 
+            {
+                if(pfds[0].revents & POLLIN)
                 {
-                    /*
-                     * When a new client connects accept() return a new file descriptor (new_fd) and fills it with the client address
-                     * for communicating with the new client
-                     */
+                    printf("File descriptor %d, is ready to read input", pfds[0].fd);
+                }
+                // printf("pfds[%i].fd: %i\n", i, pfds[i].fd);
+                // printf("pfds[%i].revents: %i\n", i, pfds[i].revents);
+                // printf("\n");
 
-                    addr_size = sizeof client_addr;
-
-                    new_fd = accept(s_fd, (struct sockaddr *)&client_addr, &addr_size);
-                    if (new_fd == -1)
+                if(pfds[i].fd == new_fd && pfds[1].revents & POLLOUT) // ready to write something
+                {
+                    // printf("new fd(if statement): %i\n", new_fd);
+                    // FIX: 
+                    // ERROR; server: send: Socket operation on non-socket
+                    // WHY? 
+                    // - Value does not change, between the accept call and the if statement,
+                    // - Does not retain error code by accident
+                    // - 
+                    char *msg = "Welcome on the [Websocket]";
+                    int len = strlen(msg);
+                    if (send(pfds[1].fd, msg, len , 0) == -1)
                     {
-                        perror("accept()");
-                    } else {
-                        add_to_pfds(&pfds, new_fd, &fd_count, &fd_size);
-
-                        /*
-                         * inet_ntop converts the client IP address from binary to a readable string
-                         * get_in_addr is explained in the implemenation
-                         * The resulting address is stored in s
-                         */
-                        inet_ntop(client_addr.ss_family, 
-                                  get_in_addr((struct sockaddr *)&client_addr),
-                                  s, sizeof s);
-
-                        printf("server got connection from %s\n", s);
-
-                        char *msg = "Welcome on the [Websocket]";
-                        int len = strlen(msg);
-                        if (send(pfds[1].fd, msg, len , 0) == -1)
-                        {
-                            perror("server: send");
-                            exit(1);
-                        }
+                        perror("server: send");
+                        break;
                     }
-                } else if (pfds[i].fd == STDIN_FILENO)
+                
+                } else if (pfds[i].fd == STDIN_FILENO && pfds[0].revents & POLLIN)
                 {
                     // input from stdin, whyever
-                } else {
+                } else if (pfds[i].fd == new_fd && pfds[1].revents & POLLIN){
                      /*
                      * the server obv also need to be able to receive something. So after 
                      * accepting the request from the client we can receive messages
@@ -283,7 +308,7 @@ int main(void)
 
                     // NOTE: After client connects, server kinda just quits, and does not accept or send any messages.
 
-                    char *buf = malloc(sizeof(char) * 50);
+                    char *buf = malloc(sizeof(char) * MAXDATASIZE);
                     if(buf == NULL) 
                     {
                         perror("server: ");
@@ -292,16 +317,22 @@ int main(void)
                     int bytes_received, len;
                     len = strlen(buf);
 
-                    if(s_fd == -1) fprintf(stderr, "fd is -1\n"); exit(1);
-                    if(s_fd > 0) fprintf(stderr, "fd is %i", s_fd );
+                    if(sockfd == -1) 
+                    {
 
-                    bytes_received = recv(s_fd, &buf, len, 0);
+                        fprintf(stderr, "fd is -1\n"); 
+                        exit(1);
+                    }
+
+                    bytes_received = recv(new_fd, &buf, len, 0);
                     if (bytes_received == -1)
                     {
                         perror("recv()");
                     } else if (bytes_received == 0)
                     {
                         printf("The client has closed the connection\n");
+                    } else {
+                        printf("msg recv: %s", buf);
                     }
             }
         }
@@ -342,7 +373,7 @@ void add_to_pfds(struct pollfd *pfds[], int new_fd, int *fd_count, int *fd_size)
      */
 
     (*pfds)[*fd_count].fd = new_fd;
-    (*pfds)[*fd_count].events = POLLIN;
+    (*pfds)[*fd_count].events = POLLIN | POLLOUT;
 
     (*fd_count)++;
 }

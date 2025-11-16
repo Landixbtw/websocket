@@ -25,6 +25,8 @@
 #define PORT "3490"
 // max number of bytes we can get at once
 #define MAXDATASIZE 1024
+#define LISTENER_INDEX 1
+
 
 void *get_in_addr(struct sockaddr *sa);
 
@@ -130,7 +132,7 @@ int main(int argc, char *argv[])
      * this is for polling
      * we start with 5 connections we can realloc if more are necessary
      */
-    int fd_count = 0;
+    int fd_count = 2;
     int fd_size = 5;
 
     /*
@@ -143,12 +145,12 @@ int main(int argc, char *argv[])
     struct pollfd *pfds = malloc(sizeof *pfds * fd_size);
 
     pfds[0].fd = 0;
-    pfds[0].events = POLLIN;
+    pfds[0].events = POLLIN; // ready to read something, either user input or server output
+
 
     pfds[1].fd = s_fd; 
-    pfds[1].events = POLLIN; 
+    pfds[1].events = POLLIN | POLLOUT; 
 
-    fd_count = 2;
 
     while(1)
     {
@@ -161,7 +163,6 @@ int main(int argc, char *argv[])
         // right now it should never time out because timeout is -1
         if (poll_event == 0) printf("Poll timed out\n");
         if (poll_event == -1) perror("client: poll()");
-        
         if (poll_event > 0)
         {
             for(int i = 0; i < fd_count; i++) 
@@ -179,15 +180,19 @@ int main(int argc, char *argv[])
                         int len = strlen(msg+1);
                         // check for EWOULDBLOCK || EAGAIN
                         // save unsent data and set POLLOUT for next poll() call
-                        if (send(pfds[1].fd, msg, len , 0) == -1)
+                        if(pfds[1].revents & POLLOUT) 
                         {
-                            perror("server: send");
-                            break;
-                        } 
-                    } else if (pfds[i].fd == pfds[0].fd)
+                            printf("client can send\n");
+                            if (send(pfds[1].fd, msg, len , 0) == -1)
+                            {
+                                perror("client: send");
+                                break;
+                            }
+                        }
+                    } else if (pfds[i].fd == pfds[1].fd)
                     {
+                        printf("client is receiving\n");
                         // we receive the message the server sent
-                        // TODO: Need different flags? Read up, after it works
                         if ((numbytes = recv(s_fd, buf, MAXDATASIZE, 0)) == -1)
                         {
                             switch(numbytes) 
@@ -208,7 +213,11 @@ int main(int argc, char *argv[])
                         printf("client: received '%s' \n", buf);
                     }
                 }
-                if(pfds[i].revents & POLLHUP)
+                if(pfds[i].revents & POLLOUT)
+                {
+                    // ready to write
+                }
+                else if(pfds[i].revents & POLLHUP)
                 {
                     fprintf(stderr, "Hangup occured on device %i", i);
                 } else if (pfds[i].revents & POLLERR)
