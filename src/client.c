@@ -142,9 +142,6 @@ int main(int argc, char *argv[])
      */
     struct pollfd *pfds = malloc(sizeof *pfds * fd_size);
 
-    // we need stdin from user, keyboard to send messages
-    //
-
     pfds[0].fd = 0;
     pfds[0].events = POLLIN;
 
