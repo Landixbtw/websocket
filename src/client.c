@@ -33,7 +33,7 @@ void *get_in_addr(struct sockaddr *sa);
 int main(int argc, char *argv[])
 {
 
-    int status, s_fd, numbytes;
+    int status, sockfd, numbytes;
     struct addrinfo hints, *servinfo, *p;
     // buffer for recv()
     char buf[MAXDATASIZE];
@@ -63,8 +63,8 @@ int main(int argc, char *argv[])
     for (p = servinfo; p != NULL; p = p->ai_next)
     {
         /* this creates the client socket */
-        s_fd = 0;
-        if ((s_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+        sockfd = 0;
+        if ((sockfd= socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
         {
             perror("client: socket()");
             continue;
@@ -73,9 +73,9 @@ int main(int argc, char *argv[])
 
         // TODO: ip addr might not be init correctly
         printf("hostname: %s\n", p->ai_canonname);
-        if (connect(s_fd, p->ai_addr, p->ai_addrlen) == -1)
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1)
         {
-            close(s_fd);
+            close(sockfd);
             perror("client: connect()");
         }
         break;
@@ -148,8 +148,8 @@ int main(int argc, char *argv[])
     pfds[0].events = POLLIN; // ready to read something, either user input or server output
 
 
-    pfds[1].fd = s_fd; 
-    pfds[1].events = POLLIN | POLLOUT; 
+    pfds[1].fd = sockfd;
+    pfds[1].events = POLLIN;
 
 
     while(1)
@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
             {
                 if(pfds[i].revents & POLLIN)
                 {
-                    if(pfds[0].fd == 0)
+                    if(pfds[i].fd == 0)
                     {
                         char *msg = custom_getline();
                         if(msg == NULL)
@@ -189,11 +189,10 @@ int main(int argc, char *argv[])
                                 break;
                             }
                         }
-                    } else if (pfds[i].fd == pfds[1].fd)
+                    } else if (pfds[i].revents && POLLIN)
                     {
-                        printf("client is receiving\n");
                         // we receive the message the server sent
-                        if ((numbytes = recv(s_fd, buf, MAXDATASIZE, 0)) == -1)
+                        if ((numbytes = recv(pfds[1].fd, buf, MAXDATASIZE, 0)) == -1)
                         {
                             switch(numbytes) 
                             {
@@ -203,14 +202,23 @@ int main(int argc, char *argv[])
                             }
                         }
 
-                        fprintf(stderr, "numbytes: %i", numbytes);
-
-                        if (numbytes == 0) printf("client: server has disconnected\n"); break;
-
                         // Null terminate the string
                         buf[numbytes] = '\0';
 
-                        printf("client: received '%s' \n", buf);
+                        if (numbytes > 0)
+                        {
+                            printf("client: received '%s' \n", buf);
+                        }
+                        else if(numbytes == 0)
+                        {
+                            printf("client: server has disconnected\n");
+                            free(pfds);
+                            close(sockfd);
+                            return 0;
+                        }
+
+
+
                     }
                 }
                 if(pfds[i].revents & POLLOUT)
@@ -230,7 +238,7 @@ int main(int argc, char *argv[])
     }
 
     free(pfds);
-    close(s_fd);
+    close(sockfd);
 
     return 0;
 }
