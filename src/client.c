@@ -25,7 +25,6 @@
 #define PORT "3490"
 // max number of bytes we can get at once
 #define MAXDATASIZE 1024
-#define LISTENER_INDEX 1
 
 
 void *get_in_addr(struct sockaddr *sa);
@@ -144,7 +143,7 @@ int main(int argc, char *argv[])
      */
     struct pollfd *pfds = malloc(sizeof *pfds * fd_size);
 
-    pfds[0].fd = 0;
+    pfds[0].fd = STDIN_FILENO;
     pfds[0].events = POLLIN; // ready to read something, either user input or server output
 
 
@@ -167,63 +166,54 @@ int main(int argc, char *argv[])
         {
             for(int i = 0; i < fd_count; i++) 
             {
-                if(pfds[i].revents & POLLIN)
+                if (pfds[i].revents & POLLIN && pfds[i].fd == sockfd)
                 {
-                    if(pfds[i].fd == 0)
+                    // we receive the message the server sent
+                    if ((numbytes = recv(pfds[1].fd, buf, MAXDATASIZE, 0)) == -1)
                     {
-                        char *msg = custom_getline();
-                        if(msg == NULL)
+                        switch(numbytes)
                         {
-                            fprintf(stderr, "msg is NULL\n");
-                            exit(1);
+                            case(EAGAIN | EWOULDBLOCK): continue;
+                            case(ENOTSOCK): fprintf(stderr, "error: this is not a socket: %s", strerror(errno)); break;
+                            default: perror("client: recv"); break;
                         }
-                        int len = strlen(msg+1);
-                        // check for EWOULDBLOCK || EAGAIN
-                        // save unsent data and set POLLOUT for next poll() call
-                        if(pfds[1].revents & POLLOUT) 
-                        {
-                            printf("client can send\n");
-                            if (send(pfds[1].fd, msg, len , 0) == -1)
-                            {
-                                perror("client: send");
-                                break;
-                            }
-                        }
-                    } else if (pfds[i].revents && POLLIN)
+                    }
+
+                    // Null terminate the string
+                    buf[numbytes] = '\0';
+
+                    if (numbytes > 0)
                     {
-                        // we receive the message the server sent
-                        if ((numbytes = recv(pfds[1].fd, buf, MAXDATASIZE, 0)) == -1)
-                        {
-                            switch(numbytes) 
-                            {
-                                case(EAGAIN | EWOULDBLOCK): continue;
-                                case(ENOTSOCK): fprintf(stderr, "error: this is not a socket: %s", strerror(errno)); break;
-                                default: perror("client: recv"); break;
-                            }
-                        }
-
-                        // Null terminate the string
-                        buf[numbytes] = '\0';
-
-                        if (numbytes > 0)
-                        {
-                            printf("client: received '%s' \n", buf);
-                        }
-                        else if(numbytes == 0)
-                        {
-                            printf("client: server has disconnected\n");
-                            free(pfds);
-                            close(sockfd);
-                            return 0;
-                        }
-
-
-
+                        printf("client: received '%s' \n", buf);
+                    }
+                    else if(numbytes == 0)
+                    {
+                        printf("client: server has disconnected\n");
+                        free(pfds);
+                        close(sockfd);
+                        return 0;
                     }
                 }
-                if(pfds[i].revents & POLLOUT)
+                else if(pfds[i].revents & POLLIN && pfds[i].fd == STDIN_FILENO)
                 {
-                    // ready to write
+                    char *msg = custom_getline();
+                    if(msg == NULL)
+                    {
+                        fprintf(stderr, "msg is NULL\n");
+                        exit(1);
+                    }
+                    int len = strlen(msg+1);
+                    // check for EWOULDBLOCK || EAGAIN
+                    // save unsent data and set POLLOUT for next poll() call
+                    if (len > 0)
+                    {
+                        printf("msg: %s", msg);
+                        if (send(pfds[1].fd, msg, len , 0) == -1)
+                        {
+                            perror("client: send");
+                            break;
+                        }
+                    }
                 }
                 else if(pfds[i].revents & POLLHUP)
                 {

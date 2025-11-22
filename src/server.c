@@ -205,7 +205,6 @@ int main(void)
      * we start with 5 connections we can realloc if more are necessary
      */
 
-
     fd_count = 1;
     fd_size = 5;
 
@@ -220,17 +219,12 @@ int main(void)
     pfds[0].fd = sockfd;
     pfds[0].events = POLLIN; // Tell me when you are ready to read
 
-    // pfds[1].fd = new_fd;
-    // pfds[1].events = POLLIN | POLLOUT;  // tell me when you are ready to read/write
-
-
     // NOTE: Right now we try get it working for one client. Expand to n later
 
     while(1)
     {
         int poll_event = poll(pfds, fd_count, -1);
-
-        if (poll_event == -1) 
+        if (poll_event == -1)
         {
             perror("server: poll()"); 
             exit(EXIT_FAILURE);
@@ -238,109 +232,52 @@ int main(void)
 
         if (poll_event == 0) perror("server: poll()"); // poll time out
 
-        if(poll_event > 0)
+        for (int i = 0; i < fd_count; i++)
         {
-            /*
-             * When a new client connects accept() return a new file descriptor (new_fd) and fills it with the client address
-             * for communicating with the new client
-             */
-
-            addr_size = sizeof client_addr;
-
-            new_fd = accept(sockfd, (struct sockaddr *)&client_addr, &addr_size);
-            if (new_fd == -1)
+            if (pfds[i].revents & POLLIN)
             {
-                perror("accept()");
-            }            else {
-
-                pfds[1].fd = new_fd;
-                pfds[1].events = POLLIN;
-                fd_count++;
-                add_to_pfds(&pfds, new_fd, &fd_count, &fd_size);
-
-                char *msg = "Welcome on the [Websocket]";
-                int len = strlen(msg);
-                if (send(pfds[1].fd, msg, len , 0) == -1)
+                if (pfds[i].fd == sockfd)
                 {
-                    perror("server: send");
-                    break;
-                }
-                printf("New client connected and welcome message sent.\n");
+                    addr_size = sizeof(client_addr);
+                    new_fd = accept(sockfd, (struct sockaddr *) &client_addr, &addr_size);
 
-                /*
-                 * inet_ntop converts the client IP address from binary to a readable string
-                 * get_in_addr is explained in the implemenation
-                 * The resulting address is stored in s
-                 */
-                inet_ntop(client_addr.ss_family, 
-                          get_in_addr((struct sockaddr *)&client_addr),
-                          s, sizeof s);
-
-                printf("server got connection from %s\n", s);
-            }
-            for (int i = 0; i < fd_count; i++) 
-            {
-                if(pfds[i].fd == STDIN_FILENO && pfds[i].revents & POLLIN)
-                {
-                    printf("File descriptor %d, is ready to read input", pfds[0].fd);
-                }
-                // printf("pfds[%i].fd: %i\n", i, pfds[i].fd);
-                // printf("pfds[%i].revents: %i\n", i, pfds[i].revents);
-                // printf("\n");
-
-                if(pfds[i].fd == new_fd) // ready to write something
-                {
-                    // printf("new fd(if statement): %i\n", new_fd);
-                    // FIX: 
-                    // ERROR; server: send: Socket operation on non-socket
-                    // WHY? 
-                    // - Value does not change, between the accept call and the if statement,
-                    // - Does not retain error code by accident
-
-                
-                } else if (pfds[i].fd == STDIN_FILENO && pfds[i].revents & POLLIN)
-                {
-                    // input from stdin, whyever
-                } else if (pfds[i].fd == new_fd && pfds[i].revents & POLLIN){
-                    /*
-                    * the server obv also need to be able to receive something. So after
-                    * accepting the request from the client we can receive messages
-                    * @param socket: The socket
-                    * @param buffer: Points to a buffer where the message should be stored
-                    * @param length: length of the buffer in bytes.
-                    * @param flags: type of message reception. (MSG_PEEK. Data is treated as
-                    * unread, next recv or similar function can still return the data)
-                    */
-
-                    // NOTE: After client connects, server kinda just quits, and does not accept or send any messages.
-
-                    char *buf = malloc(sizeof(char) * MAXDATASIZE);
-                    if(buf == NULL)
+                    if (new_fd == -1)
                     {
-                        perror("server: ");
+                        perror("server: accept()");
+                    } else
+                    {
+                        add_to_pfds(&pfds, new_fd, &fd_count, &fd_size);
+
+                        char *msg = "Welcome on the [Websocket]";
+                        int len = strlen(msg);
+                        if (send(new_fd, msg, len , 0) == -1)
+                        {
+                            perror("server: send");
+                            break;
+                        }
                     }
+                } else
+                {
+                    char buf[MAXDATASIZE];
 
-                    int bytes_received, len;
-                    len = strlen(buf);
+                    int nbytes = recv(pfds[i].fd , buf, MAXDATASIZE, 0);
 
-                    if(sockfd == -1)
+                    if (nbytes <= 0)
                     {
-                        fprintf(stderr, "fd is -1\n");
-                        exit(1);
+                        if (nbytes == 0)
+                        {
+                            printf("Socket %d hung up.\n", pfds[i].fd);
+                        } else
+                        {
+                            perror("server: recv");
+                        }
+                        close(pfds[i].fd);
+                        del_from_pfds(&pfds, i, &fd_count);
+                    } else
+                    {
+                        buf[nbytes] = '\0';
+                        printf("Message from Socket: %d \n %s\n", pfds[i].fd, buf);
                     }
-
-                    bytes_received = recv(new_fd, buf, len, 0);
-                    if (bytes_received == -1)
-                    {
-                        perror("recv()");
-                    } else if (bytes_received == 0)
-                    {
-                        printf("The client has closed the connection\n");
-                    } else {
-                        printf("msg recv: %s", buf);
-                    }
-
-                    // if server needs to reply, reply here immediatly
                 }
             }
         }
