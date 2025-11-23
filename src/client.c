@@ -93,8 +93,6 @@ int main(int argc, char *argv[])
     // we dont need the linked list anymore so we free it
     freeaddrinfo(servinfo);
 
-    // TODO: Put the client in a loop so that it does not exit when the message is sent.
-
     /*
      * -- What do we want --
      *  - Maintain persistent connection with the server
@@ -164,7 +162,7 @@ int main(int argc, char *argv[])
         if (poll_event == -1) perror("client: poll()");
         if (poll_event > 0)
         {
-            for(int i = 0; i < fd_count; i++) 
+            for(int i = 0; i < fd_count; i++)
             {
                 if (pfds[i].revents & POLLIN && pfds[i].fd == sockfd)
                 {
@@ -184,6 +182,7 @@ int main(int argc, char *argv[])
 
                     if (numbytes > 0)
                     {
+                        fprintf(stderr, ">> ");
                         printf("client: received '%s' \n", buf);
                     }
                     else if(numbytes == 0)
@@ -193,9 +192,11 @@ int main(int argc, char *argv[])
                         close(sockfd);
                         return 0;
                     }
+                    fprintf(stderr, "<< ");
                 }
                 else if(pfds[i].revents & POLLIN && pfds[i].fd == STDIN_FILENO)
                 {
+                    fprintf(stderr, "<< ");
                     char *msg = custom_getline();
                     if(msg == NULL)
                     {
@@ -207,7 +208,6 @@ int main(int argc, char *argv[])
                     // save unsent data and set POLLOUT for next poll() call
                     if (len > 0)
                     {
-                        printf("msg: %s", msg);
                         if (send(pfds[1].fd, msg, len , 0) == -1)
                         {
                             perror("client: send");
