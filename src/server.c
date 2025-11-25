@@ -278,6 +278,23 @@ int main(void)
                         buf[nbytes] = '\0';
                         printf("Message from Socket: %d \n %s\n", pfds[i].fd, buf);
                     }
+		    // We want to broadcast the message sent from client x to every client except x.
+		    int len = strlen(buf);
+		    // this means tho that we want to loop through every socket connected not just the latest socket
+
+		    // NOTE: how can we deliever a "username" to the client, so that they know who sent the message?
+		    for(int j = 1; j < fd_count; j++)
+		    {
+			if(pfds[j].fd != pfds[i].fd) {
+			    if (send(pfds[j].fd, buf, len , 0) == -1)
+			    {
+				perror("server: send");
+				break;
+			    }    
+			}
+			
+		    }
+		    
                 }
             }
         }

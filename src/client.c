@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
 
 
     pfds[1].fd = sockfd;
-    pfds[1].events = POLLIN;
+    pfds[1].events = POLLIN | POLLERR;
 
 
     while(1)
@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
                     if (numbytes > 0)
                     {
                         fprintf(stderr, ">> ");
-                        printf("client: received '%s' \n", buf);
+                        printf("socket said : %s" ,buf);
                     }
                     else if(numbytes == 0)
                     {
@@ -192,7 +192,6 @@ int main(int argc, char *argv[])
                         close(sockfd);
                         return 0;
                     }
-                    fprintf(stderr, "<< ");
                 }
                 else if(pfds[i].revents & POLLIN && pfds[i].fd == STDIN_FILENO)
                 {
@@ -203,7 +202,7 @@ int main(int argc, char *argv[])
                         fprintf(stderr, "msg is NULL\n");
                         exit(1);
                     }
-                    int len = strlen(msg+1);
+                    int len = strlen(msg);
                     // check for EWOULDBLOCK || EAGAIN
                     // save unsent data and set POLLOUT for next poll() call
                     if (len > 0)
@@ -214,10 +213,6 @@ int main(int argc, char *argv[])
                             break;
                         }
                     }
-                }
-                else if(pfds[i].revents & POLLHUP)
-                {
-                    fprintf(stderr, "Hangup occured on device %i", i);
                 } else if (pfds[i].revents & POLLERR)
                 {
                     // how can we check the error value? Errno is not set
