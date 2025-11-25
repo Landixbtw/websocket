@@ -283,10 +283,17 @@ int main(void)
 		    // this means tho that we want to loop through every socket connected not just the latest socket
 
 		    // NOTE: how can we deliever a "username" to the client, so that they know who sent the message?
+		    // Maybe array with 2 fields? [0] is username, [1] is message, --> !!DYNAMIC ARRAY!!
+		    // [0] should have character limit of 16
+		    // [1] should just be len
+
+		    char *username = "username";
+		    char *msg[2] = {username, buf};
+		    printf("user: %s \nmsg : %s", msg[0], msg[1]);
 		    for(int j = 1; j < fd_count; j++)
 		    {
 			if(pfds[j].fd != pfds[i].fd) {
-			    if (send(pfds[j].fd, buf, len , 0) == -1)
+			    if (send(pfds[j].fd, msg[1], len , 0) == -1)
 			    {
 				perror("server: send");
 				break;

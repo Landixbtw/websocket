@@ -36,6 +36,7 @@ int main(int argc, char *argv[])
     struct addrinfo hints, *servinfo, *p;
     // buffer for recv()
     char buf[MAXDATASIZE];
+    char *msg[2];
     // IPv6 Address string length
     char s[INET6_ADDRSTRLEN];
 
@@ -183,7 +184,7 @@ int main(int argc, char *argv[])
                     if (numbytes > 0)
                     {
                         fprintf(stderr, ">> ");
-                        printf("socket said : %s" ,buf);
+                        printf("said : %s",buf);
                     }
                     else if(numbytes == 0)
                     {
