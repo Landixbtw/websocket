@@ -1,0 +1,34 @@
+# Robust configuration that mimics Linux style but uses LLVM base
+BasedOnStyle: LLVM
+
+# --- Indentation Settings ---
+# 'Never' forces the use of spaces instead of tab characters.
+UseTab: Never
+
+# Indentation width (number of spaces)
+IndentWidth: 4
+
+# Width of existing tabs (used for calculation)
+TabWidth: 4
+
+# --- Brace Wrapping (Linux/K&R Style) ---
+BreakBeforeBraces: Linux
+
+# --- Formatting Details ---
+PointerAlignment: Right
+ColumnLimit: 80
+SortIncludes: true
+IndentCaseLabels: false
+
+# --- Line Breaking & Penalties ---
+# Force breaking of long string literals
+BreakStringLiterals: true
+
+# Re-flow comments to fit within the limit
+ReflowComments: true
+
+# Penalties: Lowering these makes clang-format more willing to break lines
+# to satisfy the ColumnLimit.
+PenaltyBreakString: 10
+PenaltyBreakComment: 10
+PenaltyExcessCharacter: 1000000

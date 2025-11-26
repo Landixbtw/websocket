@@ -27,19 +27,20 @@ void *valid_ll_servinfo(struct addrinfo *linked_list)
         }
 
         printf("Valid entry found: family=%d, socktype:%d, protocol:%d\n",
-                ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+               ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
     }
-    /* 
-    * This casts ptr to the struct sockaddr_in *ptr and then access the address,
-    * where the struct sockaddr_in *ptr->sin_addr is pointing at
-    */    return &(((struct sockaddr_in*)ptr)->sin_addr);
+    /*
+     * This casts ptr to the struct sockaddr_in *ptr and then access the
+     * address, where the struct sockaddr_in *ptr->sin_addr is pointing at
+     */
+    return &(((struct sockaddr_in *)ptr)->sin_addr);
 }
 
 void show_usage(char *program_name)
 {
-    printf("Usage: \e[1m%s [server hostname / server host address]\e[0m\n", program_name);
+    printf("Usage: \e[1m%s [server hostname / server host address]\e[0m\n",
+           program_name);
 }
-
 
 void sigchld_handler(int s)
 {
@@ -47,35 +48,31 @@ void sigchld_handler(int s)
     // waitpid() might overwrite errno so we save errno
     int saved_errno = errno;
 
-    while(waitpid(-1, NULL, WNOHANG) > 0);
+    while (waitpid(-1, NULL, WNOHANG) > 0)
+        ;
 
     errno = saved_errno;
 }
 
-
 /*
- * If the the sockaddr data in the sockaddr points to AF_INET we return the IPv4 address
- * If not we return the IPv6 address
+ * If the the sockaddr data in the sockaddr points to AF_INET we return the IPv4
+ * address If not we return the IPv6 address
  */
 void *get_in_addr(struct sockaddr *sa)
 {
-    if (sa->sa_family == AF_INET)
-    {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
+    if (sa->sa_family == AF_INET) {
+        return &(((struct sockaddr_in *)sa)->sin_addr);
     }
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+    return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
-
 
 char *custom_getline(void)
 {
     char *line = NULL;
     size_t buffsize = 0;
 
-    if(getline(&line, &buffsize, stdin) == -1)
-    {
-        if(feof(stdin))
-        {
+    if (getline(&line, &buffsize, stdin) == -1) {
+        if (feof(stdin)) {
             // EOF
             free(line);
             line = NULL;

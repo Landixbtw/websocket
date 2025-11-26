@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 
 #include <netdb.h>
@@ -24,5 +24,4 @@ void sigchld_handler(int s);
 void *get_in_addr(struct sockaddr *sa);
 char *custom_getline(void);
 
-
-#endif 
+#endif
